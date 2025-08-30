@@ -84,27 +84,28 @@ class  CartController extends BaseController {
         $productId = intval($data['product_id'] ?? 0);
         $variationId = $data['variation_id'] ?? '';
         $quantity = intval($data['quantity'] ?? 0);
-        
+
         if ($quantity <= 0) {
             $this->removeFromCart($productId, $variationId);
-        } else {
-            // Verificar estoque antes de atualizar
-            if ($variationId) {
-                $available = $this->stockModel->checkAvailability($productId, $variationId, $quantity);
-            } else {
-                $totalStock = $this->stockModel->getTotalStockByProduct($productId);
-                $available = $totalStock >= $quantity;
-            }
-            
-            if (!$available) {
-                $this->setFlashMessage('error', 'Estoque insuficiente para a quantidade solicitada');
-            } else {
-                $this->updateCartItem($productId, $variationId, $quantity);
-                $this->setFlashMessage('success', 'Carrinho atualizado');
-            }
+            $this->json(['success' => true, 'message' => 'Produto removido do carrinho']);
+            return;
         }
-        
-        $this->redirect(BASE_URL . '/?p=cart&a=viewCart');
+
+        // Verificar estoque antes de atualizar
+        if ($variationId) {
+            $available = $this->stockModel->checkAvailability($productId, $variationId, $quantity);
+        } else {
+            $totalStock = $this->stockModel->getTotalStockByProduct($productId);
+            $available = $totalStock >= $quantity;
+        }
+
+        if (!$available) {
+            $this->json(['success' => false, 'message' => 'Estoque insuficiente para a quantidade solicitada']);
+            return;
+        }
+
+        $this->updateCartItem($productId, $variationId, $quantity);
+        $this->json(['success' => true, 'message' => 'Carrinho atualizado']);
     }
     
     public function remove() {

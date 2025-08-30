@@ -45,17 +45,18 @@
                                     <div class="input-group">
                                         <button type="button" 
                                                 class="btn btn-outline-secondary btn-sm" 
-                                                onclick="updateQuantity(<?= $item['product']['id'] ?>, '<?= $item['variation_id'] ?>', <?= $item['quantity'] - 1 ?>)">
+                                                onclick="updateQuantity(<?= $item['product']['id'] ?>, '<?= $item['variation_id'] ?>', 'sub')">
                                             -
                                         </button>
                                         <input type="number" 
                                                class="form-control form-control-sm text-center" 
                                                value="<?= $item['quantity'] ?>" 
-                                               min="1" 
-                                               onchange="updateQuantity(<?= $item['product']['id'] ?>, '<?= $item['variation_id'] ?>', this.value)">
+                                               min="1"
+                                               name="quantity-p-<?= $item['product']['id'] ?>"
+                                               onchange="updateQuantity(<?= $item['product']['id'] ?>, '<?= $item['variation_id'] ?>', 'equal')">
                                         <button type="button" 
                                                 class="btn btn-outline-secondary btn-sm" 
-                                                onclick="updateQuantity(<?= $item['product']['id'] ?>, '<?= $item['variation_id'] ?>', <?= $item['quantity'] + 1 ?>)">
+                                                onclick="updateQuantity(<?= $item['product']['id'] ?>, '<?= $item['variation_id'] ?>', 'sum')">
                                             +
                                         </button>
                                     </div>
@@ -194,20 +195,45 @@ $content = ob_get_clean();
 // Add custom scripts
 $scripts = '
 <script>
-function updateQuantity(productId, variationId, quantity) {
-    if (quantity < 1) {
-        removeItem(productId, variationId);
-        return;
-    }
+function updateQuantity(productId, variationId, signal) {
+    const input = document.getElementsByName("quantity-p-" + productId)[0];
+    let quantity = input.value;
     
+    if (quantity < 1) {
+        quantity = 0;
+    } else if (signal === "sum") {
+        quantity++;
+    } else if (signal === "sub") {
+        quantity--;
+    }
+
     const formData = new FormData();
     formData.append("product_id", productId);
     formData.append("variation_id", variationId);
     formData.append("quantity", quantity);
-    
+
     fetch(BASE_URL + "/?p=cart&a=update", {
         method: "POST",
         body: formData
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error("Erro na requisição");
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            // Atualiza o input de quantidade
+            if (input) {
+                input.value = quantity;
+            }
+            
+            updateCartCount();
+            showAlert(data.message, "success");
+        } else {
+            showAlert(data.message, "danger");
+        }
     })
     .catch(error => {
         showAlert("Erro ao atualizar carrinho", "danger");
@@ -215,19 +241,28 @@ function updateQuantity(productId, variationId, quantity) {
     });
 }
 
+
 function removeItem(productId, variationId) {
     if (confirm("Tem certeza que deseja remover este item?")) {
+        
         const formData = new FormData();
         formData.append("product_id", productId);
         formData.append("variation_id", variationId);
+        formData.append("quantity", 0);
         
-        fetch(BASE_URL + "/?p=cart&a=remove", {
+        fetch(BASE_URL + "/?p=cart&a=update", {
             method: "POST",
             body: formData
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error("Erro na requisição");
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
+                updateCartCount();
                 showAlert(data.message, "success");
                 setTimeout(() => location.reload(), 1000);
             } else {
@@ -235,7 +270,7 @@ function removeItem(productId, variationId) {
             }
         })
         .catch(error => {
-            showAlert("Erro ao remover item", "danger");
+            showAlert("Erro ao atualizar carrinho", "danger");
             console.error("Error:", error);
         });
     }
